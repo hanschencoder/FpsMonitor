@@ -25,17 +25,19 @@ starttime = 0
 begintime = 0
 
 
-def query_surfaceflinger_frame_count():
+def get_surfaceflinger_frame_count():
     parcel = subprocess.Popen("adb shell service call SurfaceFlinger 1013",
                               stdout=subprocess.PIPE,
                               stderr=subprocess.PIPE,
                               shell=True).communicate()[0]
     if not parcel:
-        raise Exception("FAILED: adb shell service call SurfaceFlinger 1013")
+        print('FAILED: adb shell service call SurfaceFlinger 1013')
+        return 0
 
     framecount = re.search("Result: Parcel\\(([a-f0-9]+) ", parcel.decode())
     if not framecount:
-        raise Exception("Unexpected result from SurfaceFlinger: " + parcel.decode())
+        print("Unexpected result from SurfaceFlinger: " + parcel.decode())
+        return 0
 
     return int(framecount.group(1), 16)
 
@@ -46,7 +48,8 @@ def get_gpu_busy():
                               stderr=subprocess.PIPE,
                               shell=True).communicate()[0]
     if not result:
-        raise Exception("FAILED: adb shell cat /sys/class/kgsl/kgsl-3d0/gpubusy")
+        print('FAILED: adb shell cat /sys/class/kgsl/kgsl-3d0/gpubusy')
+        return 0.0
 
     split_str = result.decode().split()
     if split_str[1] == '0':
@@ -62,7 +65,8 @@ def get_cpu_frequencies():
                               stderr=subprocess.PIPE,
                               shell=True).communicate()[0]
     if not result:
-        raise Exception("FAILED: adb shell cat /sys/devices/system/cpu/cpu/cpufreq/scaling_cur_freq")
+        print('FAILED: adb shell cat /sys/devices/system/cpu/cpu/cpufreq/scaling_cur_freq')
+        return [0, 0, 0]
 
     return result.decode().split()
 
@@ -90,7 +94,7 @@ def update(frame, fps_ax, gpu_busy_ax, cpu_frequencies_ax, memory_ax):
     sample_memory_available.append(mem_info['MemAvailable'])
     sample_memory_free.append(mem_info['MemFree'])
 
-    endframe = query_surfaceflinger_frame_count()
+    endframe = get_surfaceflinger_frame_count()
     endtime = time.time()
     fps = (endframe - startframe) / (endtime - starttime)
     startframe = endframe
@@ -185,7 +189,7 @@ def startAnimation(interval):
     global startframe
     global starttime
     global begintime
-    startframe = query_surfaceflinger_frame_count()
+    startframe = get_surfaceflinger_frame_count()
     starttime = time.time()
     begintime = starttime
 
