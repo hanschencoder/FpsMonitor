@@ -208,6 +208,6 @@ def startAnimation(interval):
 
 if __name__ == '__main__':
     parser = OptionParser()
-    parser.add_option("-i", "--interval", type="int", default="50", help="Interval of milliseconds to count frames")
+    parser.add_option("-i", "--interval", type="int", default="500", help="Interval of milliseconds to count frames")
     (options, args) = parser.parse_args()
     startAnimation(options.interval)
