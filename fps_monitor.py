@@ -8,13 +8,21 @@ import matplotlib.pyplot as plt
 import sys
 import os
 from matplotlib import _pylab_helpers
+import matplotlib.animation as animation
+from threading import Thread
 
 sample_time = []
 sample_fps = []
-sample_gpu_loader = []
+sample_gpu_load = []
 sample_cpu0_frequencies = []
 sample_cpu4_frequencies = []
 sample_cpu7_frequencies = []
+sample_memory_free = []
+sample_memory_available = []
+
+startframe = 0
+starttime = 0
+begintime = 0
 
 
 def query_surfaceflinger_frame_count():
@@ -32,7 +40,7 @@ def query_surfaceflinger_frame_count():
     return int(framecount.group(1), 16)
 
 
-def gete_gpu_busy():
+def get_gpu_busy():
     result = subprocess.Popen("adb shell cat /sys/class/kgsl/kgsl-3d0/gpubusy",
                               stdout=subprocess.PIPE,
                               stderr=subprocess.PIPE,
@@ -46,7 +54,7 @@ def gete_gpu_busy():
     return float(split_str[0]) / float(split_str[1]) * 100
 
 
-def gete_cpu_frequencies():
+def get_cpu_frequencies():
     result = subprocess.Popen('''adb shell "cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_cur_freq && \
                                             cat /sys/devices/system/cpu/cpu4/cpufreq/scaling_cur_freq && \
                                             cat /sys/devices/system/cpu/cpu7/cpufreq/scaling_cur_freq"''',
@@ -59,78 +67,143 @@ def gete_cpu_frequencies():
     return result.decode().split()
 
 
-def main(interval):
+def get_memory_info():
+    result = subprocess.Popen('adb shell cat /proc/meminfo', stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                              shell=True).communicate()[0]
+    if not result:
+        raise Exception("FAILED: adb shell cat /proc/meminfo")
+    return dict((i.split()[0].rstrip(':'), int(i.split()[1]) / 1024) for i in result.decode().strip().split('\n'))
+
+
+def update(frame, fps_ax, gpu_busy_ax, cpu_frequencies_ax, memory_ax):
+
+    global startframe
+    global starttime
+
+    sample_gpu_load.append(get_gpu_busy())
+    frequencies = get_cpu_frequencies()
+    sample_cpu0_frequencies.append(int(frequencies[0]))
+    sample_cpu4_frequencies.append(int(frequencies[1]))
+    sample_cpu7_frequencies.append(int(frequencies[2]))
+
+    mem_info = get_memory_info()
+    sample_memory_available.append(mem_info['MemAvailable'])
+    sample_memory_free.append(mem_info['MemFree'])
+
+    endframe = query_surfaceflinger_frame_count()
+    endtime = time.time()
+    fps = (endframe - startframe) / (endtime - starttime)
+    startframe = endframe
+    starttime = endtime
+
+    sample_time.append(endtime - begintime)
+    sample_fps.append(fps)
+
+    display_point = -50
+    time_data = sample_time[display_point:]
+
+    fps_ax.clear()
+    gpu_busy_ax.clear()
+    cpu_frequencies_ax.clear()
+    memory_ax.clear()
+
+    fps_ax.grid(True, which='both', linestyle='--')
+    fps_ax.set_title('Frame Per Second')
+    fps_ax.set_ylim(-5, 150)
+    fps_ax.plot(time_data,
+                sample_fps[display_point:],
+                color='b',
+                marker='.',
+                linestyle='solid',
+                linewidth=1,
+                markersize=4)
+
+    gpu_busy_ax.grid(True, which='both', linestyle='--')
+    gpu_busy_ax.set_title('GPU Load(%)')
+    gpu_busy_ax.set_ylim(-5, 100)
+    gpu_busy_ax.plot(time_data,
+                     sample_gpu_load[display_point:],
+                     color='b',
+                     marker='.',
+                     linestyle='solid',
+                     linewidth=1,
+                     markersize=4)
+
+    cpu_frequencies_ax.grid(True, which='both', linestyle='--')
+    cpu_frequencies_ax.set_title('CPU Frequencies')
+    cpu_frequencies_ax.set_ylim(-100, 3000000)
+    cpu_frequencies_ax.plot(time_data,
+                            sample_cpu0_frequencies[display_point:],
+                            label='little',
+                            color='r',
+                            marker='.',
+                            linestyle='solid',
+                            linewidth=1,
+                            markersize=4)
+    cpu_frequencies_ax.plot(time_data,
+                            sample_cpu4_frequencies[display_point:],
+                            label='big',
+                            color='g',
+                            marker='.',
+                            linestyle='solid',
+                            linewidth=1,
+                            markersize=4)
+    cpu_frequencies_ax.plot(time_data,
+                            sample_cpu7_frequencies[display_point:],
+                            label='prime',
+                            color='b',
+                            marker='.',
+                            linestyle='solid',
+                            linewidth=1,
+                            markersize=4)
+    cpu_frequencies_ax.legend()
+
+    memory_ax.grid(True, which='both', linestyle='--')
+    memory_ax.set_title('Memory(MB)')
+    # memory_ax.set_ylim(-100, 1024 * 16)
+    memory_ax.plot(time_data,
+                   sample_memory_available[display_point:],
+                   label='available',
+                   color='r',
+                   marker='.',
+                   linestyle='solid',
+                   linewidth=1,
+                   markersize=4)
+    memory_ax.plot(time_data,
+                   sample_memory_free[display_point:],
+                   label='free',
+                   color='b',
+                   marker='.',
+                   linestyle='solid',
+                   linewidth=1,
+                   markersize=4)
+    memory_ax.legend()
+
+
+def startAnimation(interval):
+
+    global startframe
+    global starttime
+    global begintime
     startframe = query_surfaceflinger_frame_count()
     starttime = time.time()
     begintime = starttime
 
-    plt.ion()
-    fig = plt.figure(figsize=(12, 6))
+    fig = plt.figure(figsize=(12, 6), facecolor=None, frameon=True, edgecolor='green')
     fps_ax = fig.add_subplot(2, 2, 1)
-    fps_ax.grid(True, which='both', linestyle='--')
     gpu_busy_ax = fig.add_subplot(2, 2, 3)
-    gpu_busy_ax.grid(True, which='both', linestyle='--')
     cpu_frequencies_ax = fig.add_subplot(2, 2, 2)
-    cpu_frequencies_ax.grid(True, which='both', linestyle='--')
+    memory_ax = fig.add_subplot(2, 2, 4)
 
-    try:
-        while True:
-            time.sleep(interval)
-            manager = _pylab_helpers.Gcf.get_active()
-            if manager is None:
-                break
-
-            sample_gpu_loader.append(gete_gpu_busy())
-            frequencies = gete_cpu_frequencies()
-            sample_cpu0_frequencies.append(frequencies[0])
-            sample_cpu4_frequencies.append(frequencies[1])
-            sample_cpu7_frequencies.append(frequencies[2])
-
-            endframe = query_surfaceflinger_frame_count()
-            endtime = time.time()
-            fps = (endframe - startframe) / (endtime - starttime)
-            sample_time.append(endtime - begintime)
-            sample_fps.append(fps)
-            print("%.3f" % fps)
-
-            fps_ax.set_title('FPS Monitor')
-            fps_ax.set_ylabel('Frame Per Second')
-            fps_ax.plot(sample_time, sample_fps, 'b-')
-
-            gpu_busy_ax.set_title('GPU Busy')
-            gpu_busy_ax.set_ylabel('GPU Load(%)')
-            gpu_busy_ax.plot(sample_time, sample_gpu_loader, 'b-')
-
-            cpu_frequencies_ax.set_title('CPU Frequencies')
-            cpu_frequencies_ax.set_ylabel('CPU Frequencies')
-            cpu_frequencies_ax.plot(sample_time, sample_cpu0_frequencies, 'r-')
-            cpu_frequencies_ax.plot(sample_time, sample_cpu4_frequencies, 'g-')
-            cpu_frequencies_ax.plot(sample_time, sample_cpu7_frequencies, 'b-')
-            fig.canvas.draw()
-            plt.pause(0.001)
-
-            startframe = endframe
-            starttime = endtime
-    except:
-        pass
-
-    saveData()
-    plt.close()
-    sys.exit()
-
-
-def saveData():
-    fig = plt.figure(figsize=(12, 6))
-    ax = fig.add_subplot(1, 1, 1)
-    ax.set_title('FPS Monitor')
-    ax.set_xlabel('Time')
-    ax.set_ylabel('Frame Per Second')
-    ax.plot(sample_time, sample_fps, 'b-')
-    plt.savefig(os.getcwd() + '/savefig.png')
+    ani = animation.FuncAnimation(fig,
+                                  update,
+                                  interval=interval,
+                                  fargs=(fps_ax, gpu_busy_ax, cpu_frequencies_ax, memory_ax))
+    plt.show()
 
 
 if __name__ == '__main__':
     parser = OptionParser()
-    parser.add_option("-i", "--interval", type="int", default="500", help="Interval of milliseconds to count frames")
+    parser.add_option("-i", "--interval", type="int", default="50", help="Interval of milliseconds to count frames")
     (options, args) = parser.parse_args()
-    main(options.interval / 1000.0)
+    startAnimation(options.interval)
