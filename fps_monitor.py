@@ -10,6 +10,7 @@ import os
 from matplotlib import _pylab_helpers
 import matplotlib.animation as animation
 from threading import Thread
+import matplotlib.style as style
 
 sample_time = []
 sample_fps = []
@@ -86,9 +87,9 @@ def update(frame, fps_ax, gpu_busy_ax, cpu_frequencies_ax, memory_ax):
 
     sample_gpu_load.append(get_gpu_busy())
     frequencies = get_cpu_frequencies()
-    sample_cpu0_frequencies.append(int(frequencies[0]))
-    sample_cpu4_frequencies.append(int(frequencies[1]))
-    sample_cpu7_frequencies.append(int(frequencies[2]))
+    sample_cpu0_frequencies.append(int(frequencies[0]) / 1000)
+    sample_cpu4_frequencies.append(int(frequencies[1]) / 1000)
+    sample_cpu7_frequencies.append(int(frequencies[2]) / 1000)
 
     mem_info = get_memory_info()
     sample_memory_available.append(mem_info['MemAvailable'])
@@ -134,8 +135,8 @@ def update(frame, fps_ax, gpu_busy_ax, cpu_frequencies_ax, memory_ax):
                      markersize=4)
 
     cpu_frequencies_ax.grid(True, which='both', linestyle='--')
-    cpu_frequencies_ax.set_title('CPU Frequencies')
-    cpu_frequencies_ax.set_ylim(-100, 3000000)
+    cpu_frequencies_ax.set_title('CPU Frequencies(MHz)')
+    cpu_frequencies_ax.set_ylim(-100, 3000)
     cpu_frequencies_ax.plot(time_data,
                             sample_cpu0_frequencies[display_point:],
                             label='little',
@@ -193,6 +194,9 @@ def startAnimation(interval):
     starttime = time.time()
     begintime = starttime
 
+    default_style = 'seaborn-whitegrid'
+    if default_style in style.available:
+        style.use(default_style)
     fig = plt.figure(figsize=(12, 6), facecolor=None, frameon=True, edgecolor='green')
     fps_ax = fig.add_subplot(2, 2, 1)
     gpu_busy_ax = fig.add_subplot(2, 2, 3)
