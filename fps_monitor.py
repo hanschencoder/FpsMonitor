@@ -11,6 +11,8 @@ from matplotlib import _pylab_helpers
 import matplotlib.animation as animation
 from threading import Thread
 import matplotlib.style as style
+import matplotlib.lines as lines
+import matplotlib.text as text
 
 sample_time = []
 sample_fps = []
@@ -80,6 +82,15 @@ def get_memory_info():
     return dict((i.split()[0].rstrip(':'), int(i.split()[1]) / 1024) for i in result.decode().strip().split('\n'))
 
 
+def draw_marker(axes, x, y):
+    axes.add_artist(lines.Line2D([0, x[-1]], [y[-1], y[-1]], linestyle='--', color='silver', linewidth='1'))
+    axes.add_artist(
+        text.Text(x[-1] ,
+                  y[-1] + axes.get_ylim()[1] * 0.05,
+                  text=int(y[-1]),
+                  horizontalalignment='right'))
+
+
 def update(frame, fps_ax, gpu_busy_ax, cpu_frequencies_ax, memory_ax):
 
     global startframe
@@ -122,21 +133,23 @@ def update(frame, fps_ax, gpu_busy_ax, cpu_frequencies_ax, memory_ax):
                 linestyle='solid',
                 linewidth=1,
                 markersize=4)
+    draw_marker(fps_ax, time_data, sample_fps[display_point:])
 
     gpu_busy_ax.grid(True, which='both', linestyle='--')
     gpu_busy_ax.set_title('GPU Load(%)')
-    gpu_busy_ax.set_ylim(-5, 100)
+    gpu_busy_ax.set_ylim(-5, 120)
     gpu_busy_ax.plot(time_data,
-                     sample_gpu_load[display_point:],
-                     color='b',
-                     marker='.',
-                     linestyle='solid',
-                     linewidth=1,
-                     markersize=4)
+                        sample_gpu_load[display_point:],
+                        color='b',
+                        marker='.',
+                        linestyle='solid',
+                        linewidth=1,
+                        markersize=4)
+    draw_marker(gpu_busy_ax, time_data, sample_gpu_load[display_point:])
 
     cpu_frequencies_ax.grid(True, which='both', linestyle='--')
     cpu_frequencies_ax.set_title('CPU Frequencies(MHz)')
-    cpu_frequencies_ax.set_ylim(-100, 3000)
+    cpu_frequencies_ax.set_ylim(-100, 3400)
     cpu_frequencies_ax.plot(time_data,
                             sample_cpu0_frequencies[display_point:],
                             label='little',
@@ -165,24 +178,26 @@ def update(frame, fps_ax, gpu_busy_ax, cpu_frequencies_ax, memory_ax):
 
     memory_ax.grid(True, which='both', linestyle='--')
     memory_ax.set_title('Memory(MB)')
-    # memory_ax.set_ylim(-100, 1024 * 16)
+    memory_ax.set_ylim(-100, sample_memory_available[-1] + 1024)
     memory_ax.plot(time_data,
-                   sample_memory_available[display_point:],
-                   label='available',
-                   color='r',
-                   marker='.',
-                   linestyle='solid',
-                   linewidth=1,
-                   markersize=4)
+                    sample_memory_available[display_point:],
+                    label='available',
+                    color='r',
+                    marker='.',
+                    linestyle='solid',
+                    linewidth=1,
+                    markersize=4)
     memory_ax.plot(time_data,
-                   sample_memory_free[display_point:],
-                   label='free',
-                   color='b',
-                   marker='.',
-                   linestyle='solid',
-                   linewidth=1,
-                   markersize=4)
+                    sample_memory_free[display_point:],
+                    label='free',
+                    color='b',
+                    marker='.',
+                    linestyle='solid',
+                    linewidth=1,
+                    markersize=4)
     memory_ax.legend()
+    draw_marker(memory_ax, time_data, sample_memory_available[display_point:])
+    draw_marker(memory_ax, time_data, sample_memory_free[display_point:])
 
 
 def startAnimation(interval):
